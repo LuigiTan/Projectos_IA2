@@ -3,7 +3,7 @@ using UnityEngine.InputSystem;
 
 public class ElCanelo : MonoBehaviour
 {
-    private BobSPA bob;
+    private BasicScav bob;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {

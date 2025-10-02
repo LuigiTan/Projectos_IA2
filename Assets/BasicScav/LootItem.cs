@@ -2,15 +2,7 @@ using UnityEngine;
 
 public class LootItem : MonoBehaviour
 {
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
-    {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
+    public string lootName = "Loot";
+    public int value = 1;//Valor para cambiarle en el inspector
+                        //LEDx: 10  | Can : 1
 }

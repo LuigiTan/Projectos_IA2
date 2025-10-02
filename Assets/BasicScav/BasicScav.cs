@@ -4,7 +4,7 @@ using System.Linq;
 using UnityEngine.AI;
 using TMPro;
 
-public class BobSPA : MonoBehaviour
+public class BasicScav : MonoBehaviour
 {
     private float health = 50;
     private float maxHealth = 100;
@@ -31,13 +31,28 @@ public class BobSPA : MonoBehaviour
 
     public float criticalHealthLimit = 0.3f;
 
+    //Variables para loot
+    public float lootDetectionRadius = 5f; // Rango de deteccion. Tal vez lo tenga que bajar
+    private LootItem targetLoot; // loot a la que va a ir
+
+    public float lootPickUpRange = 1.2f;
+
+    [SerializeField] private LootItem carryingLoot;// Antes usaba esto, ahora solo esta para debug
+    [SerializeField] private bool hasLoot = false;
+    [SerializeField] private string carriedLootName = "";//Redundante
+    [SerializeField] private int carriedLootValue = 0;
+
+    //Debug
+    [SerializeField] private string inventoryStatus = "Inventario: [Vacio]";
+
     private void Start()
     {
         actionScores = new Dictionary<string, float>()
         {
             {"Flee", 0f },
             {"Chase", 0f },
-            {"Patrol" ,0f }
+            {"Patrol" ,0f },
+            {"Collect",0f }//Nueva accion
         };
 
         health = maxHealth;
@@ -55,7 +70,37 @@ public class BobSPA : MonoBehaviour
             patrolIndex = (patrolIndex + 1) % patrolPoints.Length;
         }
 
-        //PLAN 
+        //----> Es probable que haya otra forma de hacer esto, lo iba a hacer con una esfera como hija del enemigo pero este tambien jala
+        //Podria hacer la esfera en otro metodo para que no sea tan pesado con una rutina, pero hay muy pocos objetos asi que creo que por ahora no deberia haber problema
+        // Buscar loot si no estamos cargando nada
+        if (!hasLoot) //Esto se podria cambiar por una comparacion de inventory space si lo quisiera usar despues
+        {
+            // Una esfera con el radio de deteccion
+            Collider[] hits = Physics.OverlapSphere(transform.position, lootDetectionRadius);
+
+            LootItem bestLoot = null;
+            int bestValue = -1;
+
+            foreach (var hit in hits)
+            {
+                if (hit.TryGetComponent(out LootItem loot))
+                {
+                    if (loot.value > bestValue)
+                    {
+                        bestValue = loot.value;
+                        bestLoot = loot;
+                    }
+                }
+            }
+
+            targetLoot = bestLoot;
+        }
+        else
+        {
+            targetLoot = null; // si ya tiene loot, ignora lo que se encuentre
+        }
+
+        //------------->   PLAN 
 
         UpdatePrediction();
         float healthRatio = Mathf.Clamp01(health / maxHealth);
@@ -77,6 +122,17 @@ public class BobSPA : MonoBehaviour
         actionScores["Chase"] = aggroFactor * 10 * (lineOfSight == true ? 1 : 0);
         actionScores["Patrol"] = 3f;
 
+        //Accion para lootear 
+        //Solo entra si tiene un target para lootear y no esta cargando nada
+        if (targetLoot != null && hasLoot == false)
+        {
+            actionScores["Collect"] = 5f;//Esto deberia de ser prioridad intermedia. Para que nunca se ponga a lootear en medio del chase
+        }
+        else
+        {
+            actionScores["Collect"] = 0f;
+        }
+
         fleeText.text = "FLEE = " + actionScores["Flee"];
         chaseText.text = "CHASE = " + actionScores["Chase"];
 
@@ -92,6 +148,9 @@ public class BobSPA : MonoBehaviour
                 break;
             case "Patrol":
                 Patrol();
+                break;
+            case "Collect":
+                Collect();
                 break;
             default:
                 break;
@@ -202,4 +261,43 @@ public class BobSPA : MonoBehaviour
     }
 
     #endregion
+
+
+    private bool isCollecting = false;
+
+    private void Collect()
+    {
+        if (targetLoot == null) return;//Tal vez son demasiados failsafes
+
+        //Ir a la loot
+        agentSmith.SetDestination(targetLoot.transform.position);
+
+        //Checar si ya esta ahi
+        if (!isCollecting && Vector3.Distance(transform.position, targetLoot.transform.position) < lootPickUpRange) //<-- Bajar si es necesario [UPDATE]: Mejor lo hago variable, es 1.2 originalmente
+        {
+            StartCoroutine(CollectLootRoutine());
+        }
+    }
+    private System.Collections.IEnumerator CollectLootRoutine()
+    {
+        isCollecting = true;
+        agentSmith.ResetPath(); // A ver si funciona como deberia
+
+        yield return new WaitForSeconds(1f); // Deberia de simular que agarra el objeto
+
+        //Datos de la loot robada
+        if (targetLoot != null)
+        {
+            carriedLootName = targetLoot.lootName;
+            carriedLootValue = targetLoot.value;
+            hasLoot = true;// Aqui se cambiaria a incrementar el espacio en inventario
+            inventoryStatus = "Inventario: [" + carriedLootName + "]";
+
+            Destroy(targetLoot.gameObject);
+            targetLoot = null;
+        }
+            
+        isCollecting = false;
+    }
+
 }
